@@ -1,0 +1,38 @@
+{
+  "name": "evm-block-monitor",
+  "version": "1.0.0",
+  "description": "EVM区块链数据全量监听程序",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node -r dotenv/config src/app.js",
+    "start:test": "cross-env TEST_MODE=true node -r dotenv/config src/app.js",
+    "dev": "nodemon -r dotenv/config src/app.js",
+    "dev:test": "cross-env TEST_MODE=true nodemon -r dotenv/config src/app.js",
+    "cli": "node -r dotenv/config src/cli.js",
+    "cli:test": "cross-env TEST_MODE=true node -r dotenv/config src/cli.js",
+    "test:methodid": "node src/test/methodIdTest.js"
+  },
+  "keywords": [
+    "evm",
+    "blockchain",
+    "monitor",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.15.0",
+    "express": "^4.18.2",
+    "keccak": "^3.0.4",
+    "pg": "^8.11.3",
+    "web3": "^4.3.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
