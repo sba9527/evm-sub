@@ -87,7 +87,10 @@ async function testABICalculation(calculator) {
                 
                 // 如果启用了数据库更新，则更新数据库
                 if (config.abi.updateAbiToDb) {
+                    console.log(`🧭 触发数据库更新: file=${abiFile}`);
                     await updateAbiToDatabase(abiFile, functions, events);
+                } else {
+                    console.log(`⚠️ 配置未开启updateAbiToDb，跳过数据库更新: file=${abiFile}`);
                 }
                 
                 console.log('\n' + '='.repeat(60) + '\n');
@@ -106,48 +109,61 @@ async function updateAbiToDatabase(abiFile, functions, events) {
     try {
         console.log('💾 === 更新ABI到数据库 ===');
         
+        const calculator = new MethodIdCalculator();
+        
         // 检查数据库连接
         if (!database.getPool()) {
             console.log('⚠️ 数据库连接不可用，跳过数据库更新');
             return;
         }
         
-        // 获取现有的ABI数据
-        const existingAbis = await getExistingAbis();
+        // 解析合约字段（从ABI文件名提取）
+        const contract = parseContractFromAbiFilename(abiFile);
+        console.log(`📌 合约标识: ${contract}`);
+        console.log(`📦 统计: functions=${functions.length}, events=${events.length}`);
+        
+        // 获取现有的ABI数据（按当前合约过滤）
+        const existingAbis = await getExistingAbis(contract);
         console.log(`📊 数据库中现有ABI数量: ${existingAbis.length}`);
+        
+        // 预构建签名集合，分别用于函数与事件
+        const existingFunctionSignatures = new Set(
+            existingAbis.filter(a => a.method_type === 'function').map(a => (a.signature || '').trim())
+        );
+        const existingEventSignatures = new Set(
+            existingAbis.filter(a => a.method_type === 'event').map(a => (a.signature || '').trim())
+        );
         
         let addedCount = 0;
         let updatedCount = 0;
         
         // 处理函数
         for (const func of functions) {
-            const signature = `${func.name}(${(func.inputs || []).map(input => input.type || 'string').join(',')})`;
+            const signature = `${func.name}(${(func.inputs || []).map(input => input.type || 'string').join(',')})`.trim();
             const methodId = calculator.calculateMethodIdWithInterface(func);
             
-            const existingAbi = existingAbis.find(abi => 
-                abi.signature === signature && abi.method_type === 'function'
-            );
-            
-            if (!existingAbi) {
-                // 新增
-                await addAbiToDatabase(signature, 'function', methodId, null, `From ${abiFile}`);
+            if (!existingFunctionSignatures.has(signature)) {
+                await addAbiToDatabase(signature, 'function', methodId, contract, `From ${abiFile}`);
+                console.log(`➕ 新增函数: ${signature} -> ${methodId}`);
                 addedCount++;
+                existingFunctionSignatures.add(signature);
+            } else {
+                console.log(`⏭️ 跳过已存在函数: ${signature}`);
             }
         }
         
         // 处理事件
         for (const event of events) {
-            const eventSignature = `${event.name}(${(event.inputs || []).map(input => input.type || 'string').join(',')})`;
+            const eventSignature = `${event.name}(${(event.inputs || []).map(input => input.type || 'string').join(',')})`.trim();
             const topicHash = calculator.calculateTopicHashWithInterface(event);
             
-            const existingAbi = existingAbis.find(abi => 
-                abi.signature === eventSignature && abi.method_type === 'event'
-            );
-            
-            if (!existingAbi) {
-                // 新增
-                await addAbiToDatabase(eventSignature, 'event', topicHash, null, `From ${abiFile}`);
+            if (!existingEventSignatures.has(eventSignature)) {
+                await addAbiToDatabase(eventSignature, 'event', topicHash, contract, `From ${abiFile}`);
+                console.log(`➕ 新增事件: ${eventSignature} -> ${topicHash}`);
                 addedCount++;
+                existingEventSignatures.add(eventSignature);
+            } else {
+                console.log(`⏭️ 跳过已存在事件: ${eventSignature}`);
             }
         }
         
@@ -158,9 +174,31 @@ async function updateAbiToDatabase(abiFile, functions, events) {
     }
 }
 
-async function getExistingAbis() {
+function parseContractFromAbiFilename(abiFile) {
     try {
-        const result = await database.query('SELECT * FROM a_monitor_abi');
+        // 1) 优先提取 0x 开头的以太坊地址（40或64位hex）
+        const addressMatch = abiFile.match(/0x[a-fA-F0-9]{40,64}/);
+        if (addressMatch) {
+            return addressMatch[0];
+        }
+        
+        // 2) 去掉扩展名，尝试用常见分隔符截取
+        const base = abiFile.replace(/\.[^.]+$/, '');
+        const parts = base.split(/[@_\-\.]/).filter(Boolean);
+        if (parts.length > 0) {
+            return parts[parts.length - 1];
+        }
+        
+        // 3) 兜底返回去扩展名的文件名
+        return base;
+    } catch (_) {
+        return abiFile;
+    }
+}
+
+async function getExistingAbis(contract) {
+    try {
+        const result = await database.query('SELECT * FROM a_monitor_abi WHERE contract = $1', [contract]);
         return result.rows || [];
     } catch (error) {
         console.error('获取现有ABI失败:', error.message);

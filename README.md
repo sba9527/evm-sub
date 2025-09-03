@@ -269,3 +269,35 @@ MIT License
 2. 测试真实的区块链监听功能
 3. 根据需要调整配置参数
 4. 添加更多ABI文件进行测试 
+
+### 会话总结（追加）
+
+- **会话主要目的**: 修复数据库更新时报错“calculator is not defined”。
+- **完成的主要任务**: 在`src/test/methodIdTest.js`的`updateAbiToDatabase`函数内实例化`MethodIdCalculator`，消除未定义变量引用导致的异常。
+- **关键决策和解决方案**: 采用局部实例避免跨作用域依赖，提高函数内聚性与可测试性。
+- **使用的技术栈**: Node.js、Ethers.js v6、PostgreSQL。
+- **修改的文件**: `src/test/methodIdTest.js`。
+
+### 会话总结（追加）
+
+- **会话主要目的**: 从 ABI 文件名中提取合约标识并在数据库更新时写入 `contract` 字段。
+- **完成的主要任务**: 新增 `parseContractFromAbiFilename` 方法；在 `updateAbiToDatabase` 中解析 `contract` 并在插入函数/事件记录时写入数据库。
+- **关键决策和解决方案**: 解析优先级为地址匹配 > 去扩展名并按分隔符切片 > 兜底使用去扩展名文件名。
+- **使用的技术栈**: Node.js、正则表达式、PostgreSQL。
+- **修改的文件**: `src/test/methodIdTest.js`。 
+
+### 会话总结（追加）
+
+- **会话主要目的**: 确保每个 ABI 文件独立查询与插入，避免所有记录使用同一 `contract`。
+- **完成的主要任务**: 将获取现有ABI记录的查询改为按当前解析出的 `contract` 过滤；在存在性判断时加入 `contract` 条件；保证插入记录的 `contract` 一致。
+- **关键决策和解决方案**: 通过在 `getExistingAbis(contract)` 中增加 `WHERE contract = $1`，并在本地集合查重时加入 `contract` 比较，杜绝跨文件串扰。
+- **使用的技术栈**: Node.js、PostgreSQL。
+- **修改的文件**: `src/test/methodIdTest.js`。 
+
+### 会话总结（追加）
+
+- **会话主要目的**: 修复存在性判断逻辑导致函数/事件误判为已存在的问题。
+- **完成的主要任务**: 基于当前合约查询结果预构建函数/事件签名 Set，使用集合进行存在性判断，并在新增后即时加入集合，避免重复插入或误跳过；移除逐条查找对 `contract` 的冗余判断。
+- **关键决策和解决方案**: 以签名为唯一键、以合约为查询范围，提升判断稳定性与性能。
+- **使用的技术栈**: Node.js、PostgreSQL。
+- **修改的文件**: `src/test/methodIdTest.js`。 
